@@ -30,13 +30,14 @@ const int LOXC_MAX = 475; // change when calibrated
 const int LOXR_MAX = 300; //change when calibrated
 int i, j;
 
-const int INTERVAL=2000;
+const int INTERVAL=500;
 int currentTime;
 int lastTime;
 
 const int TOTAL_NEOPIXELS = 300;
 const int rainbow2[] = {red, 0xAA4500, yellow, green, blue,0x3900c9,violet,salmon, tomato,chocolate, };
 int colorband;
+int pointX, pointY;
 //                                                             10th                                             20th
 int myMatrix[20][15] = {{19, 20,  59,  60,  99,  100,  139,  140,  179,  180,  219,  220,  259,  260, 299},  
                    { 18, 21,  58,  61,  98,  101,  138,  141,  178,  181,  218,  221,  258,  261, 298},  
@@ -59,7 +60,7 @@ int myMatrix[20][15] = {{19, 20,  59,  60,  99,  100,  139,  140,  179,  180,  2
                    {  1, 38,  41,  78,  81,  118,  121,  158,  161,  198,  201,  238,  241,  278, 281},
                    {  0, 39,  40,  79,  80,  119,  120,  159,  160,  199,  200,  239,  240,  279, 280}};
 
-
+int myColors[20][15];
 // Let Device OS manage the connection to the Particle Cloud
 SYSTEM_MODE(AUTOMATIC);
 
@@ -87,6 +88,7 @@ void setID();
 int positioner();
 void pixelFill(int start, int end, int color);
 void matrixFill(int color);
+void lineRunner(int posx, int posy,int color);
 
 void setID() {  //sets new address for each TOF sensor
   // all reset
@@ -128,6 +130,45 @@ void setID() {  //sets new address for each TOF sensor
     Serial.println(F("Failed to boot right VL53L0X"));
     while(1);
   }
+  Serial.printf("going LOW\n");
+  // all reset
+  digitalWrite(bLOXL_PIN, LOW);    
+  digitalWrite(bLOXC_PIN, LOW);
+  digitalWrite(bLOXR_PIN, LOW);
+  delay(10);
+  // all unreset
+  digitalWrite(bLOXL_PIN, HIGH);
+  digitalWrite(bLOXC_PIN, HIGH);
+  digitalWrite(bLOXR_PIN, HIGH);
+  delay(10);
+
+  // activating LOX1 and reseting LOX2
+  digitalWrite(bLOXL_PIN, HIGH);
+  digitalWrite(bLOXC_PIN, LOW);
+  digitalWrite(bLOXR_PIN, LOW);
+    delay(10);
+  if (!bLoxL.begin(bLOXL_ADDRESS)) {
+    Serial.println(F("Failed to boot bottom left VL53L0X"));
+    while(1);
+  }
+  delay(10);
+   digitalWrite(bLOXC_PIN, HIGH);
+  // initing center
+  if(!bLoxC.begin(bLOXC_ADDRESS)) {
+    Serial.println(F("Failed to boot center VL53L0X"));
+    while(1);
+  }
+  delay(10);
+
+  // activating Right
+  digitalWrite(bLOXR_PIN, HIGH);
+  delay(10);
+
+  //initing Right
+  if(!bLoxR.begin(bLOXR_ADDRESS)) {
+    Serial.println(F("Failed to boot right VL53L0X"));
+    while(1);
+  }
   Serial.printf("All Connected\n");
 }
 void setup() {
@@ -141,6 +182,9 @@ void setup() {
   pinMode(LOXL_PIN, OUTPUT);
   pinMode(LOXC_PIN, OUTPUT);
   pinMode(LOXR_PIN, OUTPUT);
+  pinMode(bLOXL_PIN, OUTPUT);
+  pinMode(bLOXC_PIN, OUTPUT);
+  pinMode(bLOXR_PIN, OUTPUT);
 
   Serial.println("Shutdown pins inited...");
 
@@ -148,12 +192,15 @@ void setup() {
   digitalWrite(LOXL_PIN, LOW);
   digitalWrite(LOXC_PIN, LOW);
   digitalWrite(LOXR_PIN, LOW);
+  digitalWrite(bLOXL_PIN, LOW);
+  digitalWrite(bLOXC_PIN, LOW);
+  digitalWrite(bLOXR_PIN, LOW);
 
   Serial.println("Both in reset mode...(all 3 are low)");
   
   
   Serial.println("Starting...");
- // setID();
+  setID();
   lastTime=millis();
    matrixFill(rainbow2[5]);
 }
@@ -162,17 +209,26 @@ void setup() {
 void loop() {
   // Does Art Loop
 for (colorband=0;colorband<100;colorband++){
-      int _start = 3* colorband %10;
+     // int _start = 3* colorband %10;
      
      // Serial.printf('Start: %i, end %i, ')
   }
   //Gets Interrupted, does user show
  // loxL.rangingTest(&measureL, false);
   if (millis()-lastTime > INTERVAL){
-  //int position=positioner();
-  //Serial.printf("%i\n",position);
-  lastTime=millis();
+    pointX= random(20);
+    pointY= random(15);
+    panel.setBrightness(random(33,40));
+    lastTime=millis();
+    // Try other single-pixel-origin things here
+    lineRunner(pointX,pointY,rainbow2[random(9)]);
+    //panel.setPixelColor(myMatrix[pointX][pointY],rainbow2[random(9)]);
+    panel.show();
   }
+}
+void lineRunner(int pos_x,int pos_y,int color){
+ // myRow=myMatrix[pointX];
+
 }
 int positioner(){ // uses TOF to see which threshold is active 
   int handPos;  
