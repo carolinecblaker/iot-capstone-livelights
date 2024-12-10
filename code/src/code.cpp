@@ -28,7 +28,7 @@ int bLOXR_PIN = D14;
 // this naming convention diverges from the styleguide in a way
 // that helps me keep track of what the variable means.
 const int LOXL_MAX = 430; 
-const int bLOXL_MAX= 400;
+const int bLOXL_MAX= 390;
 const int LOXC_MAX = 310; 
 const int bLOXC_MAX= 400;
 const int LOXR_MAX = 330; 
@@ -48,12 +48,12 @@ const int orange = (30.0/360.0)*255;
 const int yellow = (60.0/360.0)*255;
 const int green = (120.0/360.0)*255;
 const int blue = (240.0/360.0)*255;
-const int indigo = (263.0/360.0)*255;
-const int violet = (270.0/360.0)*255;
+const int indigo = (265.0/360.0)*255;
+const int violet = (275.0/360.0)*255;
 const int TOTAL_NEOPIXELS = 300;
 const int rainbow2[] = {red, orange, yellow, green, blue,indigo,violet};
-int colorband;
-int pointX, pointY;
+
+int pointX,colorband, pointY,brightVal,randomColor, start;
 
 
 //                                                             10th                                             20th
@@ -75,10 +75,13 @@ int myMatrix[20][15] = {{19, 20,  59,  60,  99,  100,  139,  140,  179,  180,  2
                    {  4, 35,  44,  75,  84,  115,  124,  155,  164,  195,  204,  235,  244,  275, 284},
                    {  3, 36,  43,  76,  83,  116,  123,  156,  163,  196,  203,  236,  243,  276, 283},
                    {  2, 37,  42,  77,  82,  117,  122,  157,  162,  197,  202,  237,  242,  277, 282},
-                   {  1, 38,  41,  78,  81,  118,  121,  158,  161,  198,  201,  238,  241,  278, 281},
+                   {  1, 38,  41,  78,  81,  118,  121,  158,  161,  198,  201,  238,  241,  278, 281},                   
                    {  0, 39,  40,  79,  80,  119,  120,  159,  160,  199,  200,  239,  240,  279, 280}};
 
 int myColors[20][15];
+
+int c_val[]= {4, 5, 6, 7, 8, 9, 10};
+int r_val[]= {8, 9, 10, 11, 12, 13, 14};
 // Let Device OS manage the connection to the Particle Cloud
 SYSTEM_MODE(AUTOMATIC);
 
@@ -105,12 +108,14 @@ VL53L0X_RangingMeasurementData_t bMeasureR;
 
 void setID();
 int positioner();
+void createDots();
 void pixelFill(int start, int end, int color);
 void matrixFill(int color);
 void lineRunner(int posx, int posy,int color);
 void rainbow(uint8_t wait);
 uint32_t hueWheel(byte WheelPos);
 byte reverseWheel(uint32_t color);
+void setPixel( uint16_t n, uint8_t r, uint8_t g, uint8_t b, uint16_t brightness);
 
 void setID() {  //sets new address for each TOF sensor
   // all reset
@@ -241,32 +246,123 @@ void loop() {
   bLoxL.rangingTest(&bMeasureL, false);
 
   if (millis()-lastTime > ONCEASOMETHING){
-    pointX= random(20);
-    pointY= random(15);
-    panel.setBrightness(random(33,40));
-    lastTime=millis();
+    start = positioner();
+    Serial.printf("start: %i\n",start);
+    createDots();
+    if(bMeasureR.RangeMilliMeter<bLOXR_MAX || measureR.RangeMilliMeter<LOXR_MAX){
     Serial.printf(" Right Top: %i, bottom :%i\n",measureR.RangeMilliMeter,bMeasureR.RangeMilliMeter);
+    }
+    if(bMeasureC.RangeMilliMeter<bLOXC_MAX || measureC.RangeMilliMeter<LOXC_MAX){
     Serial.printf(" Center Top: %i, bottom :%i\n",measureC.RangeMilliMeter,bMeasureC.RangeMilliMeter);
+    }
+    if(bMeasureL.RangeMilliMeter<bLOXL_MAX || measureL.RangeMilliMeter<LOXL_MAX){
     Serial.printf(" Left Top: %i, bottom :%i\n",measureL.RangeMilliMeter,bMeasureL.RangeMilliMeter);
+    }
     // Try other single-pixel-origin things here
     //lineRunner(pointX,pointY,rainbow2[random(9)]);
     //panel.setPixelColor(myMatrix[pointX][pointY],rainbow2[random(9)]);
-    panel.show();
+    lastTime=millis();
   }
 }
+void createDots(){
+  byte r,g,b;
+  pointX= random(20);
+  pointY= random(15);
+  brightVal=random(75,150);
+  //randomColor= hueWheel(rainbow2[random(6)]);
+    
+  // Bitwise op for rgb
+  //r = randomColor>>16 & 0xFF;
+  //g = randomColor>>8 & 0xFF;
+  //b = randomColor & 0xFF;
+
+  r= random(255);
+  g= random(255);
+  b= random(255);
+  Serial.printf("Color: R: %i, G: %i, B: %i\n",r,g,b);
+  setPixel(myMatrix[pointX][pointY],r,g,b,brightVal);
+    
+  }
+void setPixel( uint16_t n, uint8_t r, uint8_t g, uint8_t b, uint16_t brightness) {
+	panel.setPixelColor(n, (brightness*r/255) , (brightness*g/255), (brightness*b/255));
+  panel.show();
+}
+  
+
 void lineRunner(int pos_x,int pos_y,int color){
  // myRow=myMatrix[pointX];
 
 }
+// Super medium-fidelity person-position tracker
 int positioner(){ // uses TOF to see which threshold is active 
-  int handPos;  
- 
-  loxL.rangingTest(&measureL, true); // pass in 'true' to get debug data printout!
-  loxC.rangingTest(&measureC, true);
-  loxR.rangingTest(&measureR, true);
-  handPos=0;
-  return handPos;
-}
+  int handPos;
+  int x_val; 
+  int y_val;
+  //If we have any reads within the boundaries of the max
+  if ((bMeasureR.RangeMilliMeter<bLOXR_MAX)||bMeasureC.RangeMilliMeter<bLOXC_MAX||bMeasureL.RangeMilliMeter<bLOXL_MAX) {
+    // Let's compare left and right
+    if(bMeasureL.RangeMilliMeter > bMeasureR.RangeMilliMeter) {
+      // and then center to left
+      if(bMeasureL.RangeMilliMeter > bMeasureC.RangeMilliMeter){
+        x_val= 0;
+        if (measureL.RangeMilliMeter <300){
+          y_val = 6;
+        } else if (measureL.RangeMilliMeter <400){
+          y_val = 9;
+        }else if (measureL.RangeMilliMeter <500){
+          y_val = 11;
+        } else {
+          y_val= 16;
+        }
+      } else {
+        x_val= 4;
+        if (measureC.RangeMilliMeter <300){
+          y_val = 6;
+        } else if (measureC.RangeMilliMeter <400){
+          y_val = 9;
+        }else if (measureC.RangeMilliMeter <500){
+          y_val = 11;
+        } else {
+          y_val= 16;
+        }
+        }
+      } else {
+        if(bMeasureR.RangeMilliMeter > bMeasureC.RangeMilliMeter){
+        x_val= 8;
+        if (measureR.RangeMilliMeter <300){
+          y_val = 6;
+        } else if (measureR.RangeMilliMeter <400){
+          y_val = 9;
+        }else if (measureR.RangeMilliMeter <500){
+          y_val = 11;
+        } else {
+          y_val= 16;
+        }
+        } else {
+        x_val= 4;
+        if (measureC.RangeMilliMeter <300){
+          y_val = 6;
+        } else if (measureC.RangeMilliMeter <400){
+          y_val = 9;
+        }
+        else if (measureC.RangeMilliMeter <500){
+          y_val = 11;
+        } else {
+          y_val= 16;
+        }
+        }
+      }
+    handPos=  myMatrix[random(x_val,6)][y_val];
+    
+    }else {
+    handPos=-1;
+    }
+    // the interesting value is on the left, center, or right
+
+    return handPos;
+  }
+
+  
 void  pixelFill(int start, int end, int color) {
     int _i;
     for (_i = start; _i <= end; _i++ ){
@@ -280,7 +376,7 @@ void matrixFill(int color){
     for(j=0;j<15;j++) {
       panel.setPixelColor(myMatrix[i][j],color);
       panel.show();
-      delay(50);
+      delay(10);
     }
   }
 }
