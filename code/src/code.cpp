@@ -10,7 +10,6 @@
 #include "Particle.h"
 #include "Adafruit_VL53L0X.h"
 #include "neopixel.h"
-#include "colors.h"
 
 
 int LOXL_ADDRESS = 0x30;
@@ -25,19 +24,38 @@ int LOXR_PIN = D7;
 int bLOXL_PIN = D12;
 int bLOXC_PIN = D13;
 int bLOXR_PIN = D14;
-const int LOXL_MAX = 360; // change when calibrated
-const int LOXC_MAX = 475; // change when calibrated
-const int LOXR_MAX = 300; //change when calibrated
-int i, j;
+
+// this naming convention diverges from the styleguide in a way
+// that helps me keep track of what the variable means.
+const int LOXL_MAX = 430; 
+const int bLOXL_MAX= 400;
+const int LOXC_MAX = 310; 
+const int bLOXC_MAX= 400;
+const int LOXR_MAX = 330; 
+const int bLOXR_MAX= 400;
+
+int i, j,n;
 
 const int INTERVAL=500;
+const int ONCEASOMETHING= 2000;
 int currentTime;
 int lastTime;
 
+uint8_t wait;
+
+const int red = 0;
+const int orange = (30.0/360.0)*255;
+const int yellow = (60.0/360.0)*255;
+const int green = (120.0/360.0)*255;
+const int blue = (240.0/360.0)*255;
+const int indigo = (263.0/360.0)*255;
+const int violet = (270.0/360.0)*255;
 const int TOTAL_NEOPIXELS = 300;
-const int rainbow2[] = {red, 0xAA4500, yellow, green, blue,0x3900c9,violet,salmon, tomato,chocolate, };
+const int rainbow2[] = {red, orange, yellow, green, blue,indigo,violet};
 int colorband;
 int pointX, pointY;
+
+
 //                                                             10th                                             20th
 int myMatrix[20][15] = {{19, 20,  59,  60,  99,  100,  139,  140,  179,  180,  219,  220,  259,  260, 299},  
                    { 18, 21,  58,  61,  98,  101,  138,  141,  178,  181,  218,  221,  258,  261, 298},  
@@ -70,6 +88,7 @@ SYSTEM_THREAD(ENABLED);
 Adafruit_NeoPixel panel(TOTAL_NEOPIXELS, SPI1, WS2812B);
 
 
+
 Adafruit_VL53L0X loxL = Adafruit_VL53L0X();
 Adafruit_VL53L0X loxC = Adafruit_VL53L0X();
 Adafruit_VL53L0X loxR = Adafruit_VL53L0X();
@@ -89,6 +108,9 @@ int positioner();
 void pixelFill(int start, int end, int color);
 void matrixFill(int color);
 void lineRunner(int posx, int posy,int color);
+void rainbow(uint8_t wait);
+uint32_t hueWheel(byte WheelPos);
+byte reverseWheel(uint32_t color);
 
 void setID() {  //sets new address for each TOF sensor
   // all reset
@@ -203,25 +225,31 @@ void setup() {
   setID();
   lastTime=millis();
    matrixFill(rainbow2[5]);
+   n=0;
 }
 
 // loop() runs over and over again, as quickly as it can execute.
 void loop() {
   // Does Art Loop
-for (colorband=0;colorband<100;colorband++){
-     // int _start = 3* colorband %10;
-     
-     // Serial.printf('Start: %i, end %i, ')
-  }
+
   //Gets Interrupted, does user show
- // loxL.rangingTest(&measureL, false);
-  if (millis()-lastTime > INTERVAL){
+  loxR.rangingTest(&measureR, false);
+  bLoxR.rangingTest(&bMeasureR, false);
+  loxC.rangingTest(&measureC, false);
+  bLoxC.rangingTest(&bMeasureC, false);
+  loxL.rangingTest(&measureL, false);
+  bLoxL.rangingTest(&bMeasureL, false);
+
+  if (millis()-lastTime > ONCEASOMETHING){
     pointX= random(20);
     pointY= random(15);
     panel.setBrightness(random(33,40));
     lastTime=millis();
+    Serial.printf(" Right Top: %i, bottom :%i\n",measureR.RangeMilliMeter,bMeasureR.RangeMilliMeter);
+    Serial.printf(" Center Top: %i, bottom :%i\n",measureC.RangeMilliMeter,bMeasureC.RangeMilliMeter);
+    Serial.printf(" Left Top: %i, bottom :%i\n",measureL.RangeMilliMeter,bMeasureL.RangeMilliMeter);
     // Try other single-pixel-origin things here
-    lineRunner(pointX,pointY,rainbow2[random(9)]);
+    //lineRunner(pointX,pointY,rainbow2[random(9)]);
     //panel.setPixelColor(myMatrix[pointX][pointY],rainbow2[random(9)]);
     panel.show();
   }
@@ -255,4 +283,50 @@ void matrixFill(int color){
       delay(50);
     }
   }
+}
+void rainbow(uint8_t wait) {
+  uint16_t i, j;
+
+  for(j=0; j<256; j++) {
+    for(i=0; i<panel.numPixels(); i++) {
+      panel.setPixelColor(i, hueWheel((i+j) & 255));
+    }
+    panel.show();
+    delay(wait);
+  }
+}
+// Convert hue to rgb (hue values 0 - 255 equal 0 to 360 degrees)
+uint32_t hueWheel(byte WheelPos) {
+  if(WheelPos < 85) {
+   return panel.Color(255 - WheelPos * 3, WheelPos * 3, 0);
+  } else if(WheelPos < 170) {
+   WheelPos -= 85;
+   return panel.Color( 0, 255 - WheelPos * 3, WheelPos * 3);
+  } else {
+   WheelPos -= 170;
+   return panel.Color( WheelPos * 3, 0, 255 - WheelPos * 3);
+  }
+}
+
+// Convert rgb hexcolor to hue
+byte reverseWheel(uint32_t color) {
+  byte r,g,b;
+
+  r = color>>16 & 0xFF;
+  g = color>>8 & 0xFF;
+  b = color & 0xFF;
+
+  if(b==0) {
+    return (g/3);
+  }
+
+  if(g==0) {
+    return ((r/3)+170);
+  }
+
+  if(r==0) {
+    return ((b/3)+85);
+  }
+
+  return -1;
 }
