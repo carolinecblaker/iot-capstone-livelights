@@ -248,7 +248,9 @@ void loop() {
   if (millis()-lastTime > ONCEASOMETHING){
     start = positioner();
     Serial.printf("start: %i\n",start);
+    if (start== -1){
     createDots();
+    } 
     if(bMeasureR.RangeMilliMeter<bLOXR_MAX || measureR.RangeMilliMeter<LOXR_MAX){
     Serial.printf(" Right Top: %i, bottom :%i\n",measureR.RangeMilliMeter,bMeasureR.RangeMilliMeter);
     }
@@ -279,7 +281,7 @@ void createDots(){
   r= random(255);
   g= random(255);
   b= random(255);
-  Serial.printf("Color: R: %i, G: %i, B: %i\n",r,g,b);
+  //Serial.printf("Color: R: %i, G: %i, B: %i\n",r,g,b);
   setPixel(myMatrix[pointX][pointY],r,g,b,brightVal);
     
   }
@@ -290,75 +292,129 @@ void setPixel( uint16_t n, uint8_t r, uint8_t g, uint8_t b, uint16_t brightness)
   
 
 void lineRunner(int pos_x,int pos_y,int color){
- // myRow=myMatrix[pointX];
+
+ int* myRow=myMatrix[pos_y];
+ int k,r,g,b;
+  for (k=0; k<15; k++){
+
+  // Bitwise op for rgb
+  r = hueWheel(color)>>16 & 0xFF;
+  g = hueWheel(color)>>8 & 0xFF;
+  b = hueWheel(color) & 0xFF;
+
+  //Serial.printf("Line Color: R: %i, G: %i, B: %i\n",r,g,b);
+  setPixel(myMatrix[pos_x][k],r,g,b,100);
+    // k-1
+  if (k > 0){
+    setPixel(myMatrix[pos_x][k-1],r,g,b,200);
+  }
+    //k-2
+  if (k == pos_x){
+    setPixel(myMatrix[pos_x][k-1],200,200,200,200);
+    }
+  }
 
 }
 // Super medium-fidelity person-position tracker
 int positioner(){ // uses TOF to see which threshold is active 
   int handPos;
+  int colorAngle;
   int x_val; 
   int y_val;
   //If we have any reads within the boundaries of the max
   if ((bMeasureR.RangeMilliMeter<bLOXR_MAX)||bMeasureC.RangeMilliMeter<bLOXC_MAX||bMeasureL.RangeMilliMeter<bLOXL_MAX) {
     // Let's compare left and right
-    if(bMeasureL.RangeMilliMeter > bMeasureR.RangeMilliMeter) {
+    if(bMeasureL.RangeMilliMeter < bMeasureR.RangeMilliMeter) {
+      //to the left
+      Serial.printf("left \n");
       // and then center to left
-      if(bMeasureL.RangeMilliMeter > bMeasureC.RangeMilliMeter){
+      if(bMeasureL.RangeMilliMeter < bMeasureC.RangeMilliMeter){
         x_val= 0;
-        if (measureL.RangeMilliMeter <300){
-          y_val = 6;
-        } else if (measureL.RangeMilliMeter <400){
-          y_val = 9;
-        }else if (measureL.RangeMilliMeter <500){
-          y_val = 11;
+        if (bMeasureL.RangeMilliMeter <200){
+          y_val =random(0,2);
+        } else if (bMeasureL.RangeMilliMeter <300){
+         y_val =random(3,5);
+        } else if (bMeasureL.RangeMilliMeter <325){
+          y_val =random(6,8);
+        } else if (bMeasureL.RangeMilliMeter <350){
+          y_val =random(9,11);
+        } else if (bMeasureL.RangeMilliMeter <375){
+          y_val =random(12,14);
+        } else if (bMeasureL.RangeMilliMeter <400){
+          y_val =random(15,17);
         } else {
-          y_val= 16;
+          y_val =random(16,19);
         }
       } else {
         x_val= 4;
-        if (measureC.RangeMilliMeter <300){
-          y_val = 6;
-        } else if (measureC.RangeMilliMeter <400){
-          y_val = 9;
-        }else if (measureC.RangeMilliMeter <500){
-          y_val = 11;
+        if (bMeasureC.RangeMilliMeter <200){
+          y_val =random(0,2);
+        } else if (bMeasureC.RangeMilliMeter <300){
+         y_val =random(3,5);
+        } else if (bMeasureC.RangeMilliMeter <325){
+          y_val =random(6,8);
+        } else if (bMeasureC.RangeMilliMeter <350){
+          y_val =random(9,11);
+        } else if (bMeasureC.RangeMilliMeter <375){
+          y_val =random(12,14);
+        } else if (bMeasureC.RangeMilliMeter <400){
+          y_val =random(15,17);
         } else {
-          y_val= 16;
+          y_val =random(16,19);
         }
+      }
+    } else {
+      //to the right
+     // Serial.printf("right %i to %i \n",bMeasureL.RangeMilliMeter,bMeasureR.RangeMilliMeter);
+      if(bMeasureR.RangeMilliMeter < bMeasureC.RangeMilliMeter){
+        x_val= 5;
+        if (bMeasureR.RangeMilliMeter <200){
+          y_val =random(0,2);
+        } else if (bMeasureR.RangeMilliMeter <300){
+         y_val =random(3,5);
+        } else if (bMeasureR.RangeMilliMeter <325){
+          y_val =random(6,8);
+        } else if (bMeasureR.RangeMilliMeter <350){
+          y_val =random(9,11);
+        } else if (bMeasureR.RangeMilliMeter <375){
+          y_val =random(12,14);
+        } else if (bMeasureR.RangeMilliMeter <400){
+          y_val =random(15,17);
+        } else {
+          y_val =random(16,19);
         }
       } else {
-        if(bMeasureR.RangeMilliMeter > bMeasureC.RangeMilliMeter){
-        x_val= 8;
-        if (measureR.RangeMilliMeter <300){
-          y_val = 6;
-        } else if (measureR.RangeMilliMeter <400){
-          y_val = 9;
-        }else if (measureR.RangeMilliMeter <500){
-          y_val = 11;
+        x_val= 0;
+        if (bMeasureC.RangeMilliMeter <200){
+          y_val =random(0,2);
+        } else if (bMeasureC.RangeMilliMeter <300){
+         y_val =random(3,5);
+        } else if (bMeasureC.RangeMilliMeter <325){
+          y_val =random(6,8);
+        } else if (bMeasureC.RangeMilliMeter <350){
+          y_val =random(9,11);
+        } else if (bMeasureC.RangeMilliMeter <375){
+          y_val =random(12,14);
+        } else if (bMeasureC.RangeMilliMeter <400){
+          y_val =random(15,17);
         } else {
-          y_val= 16;
-        }
-        } else {
-        x_val= 4;
-        if (measureC.RangeMilliMeter <300){
-          y_val = 6;
-        } else if (measureC.RangeMilliMeter <400){
-          y_val = 9;
-        }
-        else if (measureC.RangeMilliMeter <500){
-          y_val = 11;
-        } else {
-          y_val= 16;
+          y_val =random(16,19);
         }
         }
       }
-    handPos=  myMatrix[random(x_val,6)][y_val];
-    
+      //slightly randomize base values
+      x_val=random(x_val,6);
+      y_val=random (y_val,2);
+      //Serial.printf("x_val: %i y_val: %i\n",x_val, y_val);
+      handPos=  myMatrix[x_val][y_val];
+      Serial.printf("x_val: %i y_val: %i handpos: %i\n",x_val, y_val, handPos);
+      colorAngle= random(360);
+      lineRunner(y_val,x_val, colorAngle);
     }else {
-    handPos=-1;
+      handPos=-1;
     }
     // the interesting value is on the left, center, or right
-
+    setPixel(handPos,200,0,0,155);
     return handPos;
   }
 
