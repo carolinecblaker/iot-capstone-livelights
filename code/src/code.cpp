@@ -9,9 +9,15 @@
 // Include Particle Device OS APIs
 #include "Particle.h"
 #include "Adafruit_VL53L0X.h"
+#include "Adafruit_BME280.h"
 #include "neopixel.h"
+#include <Adafruit_MQTT.h>
+#include "Adafruit_MQTT/Adafruit_MQTT_SPARK.h"
+#include "Adafruit_MQTT/Adafruit_MQTT.h"
+#include "credentials.h"
 
-
+bool status;
+const byte BPEADDRESS=0x76;
 int LOXL_ADDRESS = 0x30;
 int LOXC_ADDRESS = 0x31;
 int LOXR_ADDRESS = 0x32;
@@ -30,9 +36,9 @@ int bLOXR_PIN = D14;
 const int LOXL_MAX = 430; 
 const int bLOXL_MAX= 390;
 const int LOXC_MAX = 310; 
-const int bLOXC_MAX= 400;
+const int bLOXC_MAX= 390;
 const int LOXR_MAX = 330; 
-const int bLOXR_MAX= 400;
+const int bLOXR_MAX= 390;
 
 int i, j,n;
 
@@ -54,6 +60,8 @@ const int TOTAL_NEOPIXELS = 300;
 const int rainbow2[] = {red, orange, yellow, green, blue,indigo,violet};
 
 int pointX,colorband, pointY,brightVal,randomColor, start;
+float tempF,humidRH;
+
 
 
 //                                                             10th                                             20th
@@ -105,6 +113,14 @@ VL53L0X_RangingMeasurementData_t measureR;
 VL53L0X_RangingMeasurementData_t bMeasureL;
 VL53L0X_RangingMeasurementData_t bMeasureC;
 VL53L0X_RangingMeasurementData_t bMeasureR;
+Adafruit_BME280 bme;
+
+TCPClient TheClient; 
+
+// Setup the MQTT client class by passing in the WiFi client and MQTT server and login details. 
+Adafruit_MQTT_SPARK mqtt(&TheClient,AIO_SERVER,AIO_SERVERPORT,AIO_USERNAME,AIO_KEY); 
+
+Adafruit_MQTT_Publish pubFeed = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/starting-pixel-number");
 
 void setID();
 int positioner();
@@ -116,6 +132,8 @@ void rainbow(uint8_t wait);
 uint32_t hueWheel(byte WheelPos);
 byte reverseWheel(uint32_t color);
 void setPixel( uint16_t n, uint8_t r, uint8_t g, uint8_t b, uint16_t brightness);
+void MQTT_connect();
+bool MQTT_ping();
 
 void setID() {  //sets new address for each TOF sensor
   // all reset
@@ -197,6 +215,7 @@ void setID() {  //sets new address for each TOF sensor
     while(1);
   }
   Serial.printf("All Connected\n");
+   
 }
 void setup() {
   Wire.begin();
@@ -226,18 +245,26 @@ void setup() {
   Serial.println("Both in reset mode...(all 3 are low)");
   
   
-  Serial.println("Starting...");
+  Serial.println("Starting BME...");
+  status = bme.begin(BPEADDRESS);
   setID();
   lastTime=millis();
    matrixFill(rainbow2[5]);
    n=0;
+   
+  if (status == FALSE) {
+    Serial.printf("Bme280 at address 0x%02X failed to start", BPEADDRESS); 
+   } else {
+    Serial.printf("Bme280 at address 0x%02X online", BPEADDRESS);
+   }
 }
 
 // loop() runs over and over again, as quickly as it can execute.
 void loop() {
-  // Does Art Loop
+  MQTT_connect();
+  MQTT_ping();
 
-  //Gets Interrupted, does user show
+  //Looks for visitors
   loxR.rangingTest(&measureR, false);
   bLoxR.rangingTest(&bMeasureR, false);
   loxC.rangingTest(&measureC, false);
@@ -250,20 +277,27 @@ void loop() {
     Serial.printf("start: %i\n",start);
     if (start== -1){
     createDots();
-    } 
+  } else {
+    // Send our position
+    if(mqtt.Update()) {
+      pubFeed.publish(start);
+    }
     if(bMeasureR.RangeMilliMeter<bLOXR_MAX || measureR.RangeMilliMeter<LOXR_MAX){
-    Serial.printf(" Right Top: %i, bottom :%i\n",measureR.RangeMilliMeter,bMeasureR.RangeMilliMeter);
+      Serial.printf(" Right Top: %i, bottom :%i\n",measureR.RangeMilliMeter,bMeasureR.RangeMilliMeter);
     }
     if(bMeasureC.RangeMilliMeter<bLOXC_MAX || measureC.RangeMilliMeter<LOXC_MAX){
-    Serial.printf(" Center Top: %i, bottom :%i\n",measureC.RangeMilliMeter,bMeasureC.RangeMilliMeter);
+      Serial.printf(" Center Top: %i, bottom :%i\n",measureC.RangeMilliMeter,bMeasureC.RangeMilliMeter);
     }
     if(bMeasureL.RangeMilliMeter<bLOXL_MAX || measureL.RangeMilliMeter<LOXL_MAX){
-    Serial.printf(" Left Top: %i, bottom :%i\n",measureL.RangeMilliMeter,bMeasureL.RangeMilliMeter);
+      Serial.printf(" Left Top: %i, bottom :%i\n",measureL.RangeMilliMeter,bMeasureL.RangeMilliMeter);
     }
-    // Try other single-pixel-origin things here
-    //lineRunner(pointX,pointY,rainbow2[random(9)]);
-    //panel.setPixelColor(myMatrix[pointX][pointY],rainbow2[random(9)]);
+    tempF = 9*(bme.readTemperature()/5.0)+32; 
+    
+    humidRH = bme.readHumidity();
+    
+    
     lastTime=millis();
+    }
   }
 }
 void createDots(){
@@ -481,4 +515,38 @@ byte reverseWheel(uint32_t color) {
   }
 
   return -1;
+}
+void MQTT_connect() {
+  int8_t ret;
+ 
+  // Return if already connected.
+  if (mqtt.connected()) {
+    return;
+  }
+ 
+  Serial.print("Connecting to MQTT... ");
+ 
+  while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
+       Serial.printf("Error Code %s\n",mqtt.connectErrorString(ret));
+       Serial.printf("Retrying MQTT connection in 5 seconds...\n");
+       mqtt.disconnect();
+       delay(5000);  // wait 5 seconds and try again
+  }
+  Serial.printf("MQTT Connected!\n");
+}
+
+bool MQTT_ping() {
+  static unsigned int last;
+  bool pingStatus;
+
+  if ((millis()-last)>120000) {
+      Serial.printf("Pinging MQTT \n");
+      pingStatus = mqtt.ping();
+      if(!pingStatus) {
+        Serial.printf("Disconnecting \n");
+        mqtt.disconnect();
+      }
+      last = millis();
+  }
+  return pingStatus;
 }

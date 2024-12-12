@@ -1,6 +1,7 @@
 # Key files
 *.der
 *.pem
+credentials.h
 
 # Ignore build results and bundles
 *.bin
